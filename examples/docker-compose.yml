@@ -3,7 +3,7 @@ services:
     image: 11notes/socket-proxy:2
     container_name: docker-socket-proxy
     read_only: true
-    user: "0:0"
+    user: "0:973"
     volumes:
       - /var/run/docker.sock:/run/docker.sock:ro
       - socket-proxy:/run/proxy

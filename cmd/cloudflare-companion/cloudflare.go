@@ -110,6 +110,7 @@ func (cf *CloudflareAPI) UpdateDNSRecord(zoneID string, recordID string, record 
 }
 
 func (cf *CloudflareAPI) doRequest(method string, endpoint string, body []byte) ([]byte, error) {
+	cf.logger.Verbosef("Querying Cloudflare API: %s %s", method, endpoint)
 	var reader io.Reader
 	if body != nil {
 		reader = bytes.NewReader(body)
@@ -141,6 +142,7 @@ func (cf *CloudflareAPI) doRequest(method string, endpoint string, body []byte) 
 	if resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("http status %d: %s", resp.StatusCode, string(respBytes))
 	}
+	cf.logger.Verbosef("Cloudflare API response: %s %s -> %d", method, endpoint, resp.StatusCode)
 	return respBytes, nil
 }
 

@@ -10,9 +10,10 @@ import (
 )
 
 type Logger struct {
-	level int
-	mu    sync.Mutex
-	std   *log.Logger
+	level   int
+	verbose bool
+	mu      sync.Mutex
+	std     *log.Logger
 }
 
 const (
@@ -22,11 +23,15 @@ const (
 	levelError
 )
 
-func NewLogger(levelRaw string, logType string) *Logger {
+func NewLogger(levelRaw string) *Logger {
 	level := levelInfo
+	verbose := false
 	switch strings.ToUpper(levelRaw) {
-	case "DEBUG", "VERBOSE":
+	case "DEBUG":
 		level = levelDebug
+	case "VERBOSE":
+		level = levelDebug
+		verbose = true
 	case "NOTICE", "INFO":
 		level = levelInfo
 	case "WARN", "WARNING":
@@ -35,9 +40,7 @@ func NewLogger(levelRaw string, logType string) *Logger {
 		level = levelError
 	}
 
-	_ = logType
-
-	return &Logger{level: level, std: log.New(os.Stdout, "", 0)}
+	return &Logger{level: level, verbose: verbose, std: log.New(os.Stdout, "", 0)}
 }
 
 func (l *Logger) logf(level int, label string, format string, args ...any) {
@@ -53,3 +56,9 @@ func (l *Logger) Debugf(format string, args ...any) { l.logf(levelDebug, "DEBUG"
 func (l *Logger) Infof(format string, args ...any)  { l.logf(levelInfo, "INFO", format, args...) }
 func (l *Logger) Warnf(format string, args ...any)  { l.logf(levelWarn, "WARN", format, args...) }
 func (l *Logger) Errorf(format string, args ...any) { l.logf(levelError, "ERROR", format, args...) }
+func (l *Logger) Verbosef(format string, args ...any) {
+	if !l.verbose {
+		return
+	}
+	l.logf(levelDebug, "VERBOSE", format, args...)
+}

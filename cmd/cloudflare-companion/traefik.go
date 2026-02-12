@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,13 +16,15 @@ type TraefikRouter struct {
 	Status string `json:"status"`
 }
 
-func FetchTraefikRouters(ctx context.Context, baseURL string, insecureSkipVerify bool) ([]TraefikRouter, int, string, error) {
+func FetchTraefikRouters(ctx context.Context, baseURL string, insecureSkipVerify bool, caCertFile string) ([]TraefikRouter, int, string, error) {
+	tlsCfg, err := newTLSConfig(caCertFile, insecureSkipVerify)
+	if err != nil {
+		return nil, 0, "", err
+	}
 	httpClient := &http.Client{
 		Timeout: 15 * time.Second,
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: insecureSkipVerify,
-			},
+			TLSClientConfig: tlsCfg,
 		},
 	}
 	url := strings.TrimRight(baseURL, "/") + "/api/http/routers"

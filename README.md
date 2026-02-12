@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/nikarh/docker-traefik-cloudflare-gompanion/actions/workflows/ci.yml/badge.svg)](https://github.com/nikarh/docker-traefik-cloudflare-gompanion/actions/workflows/ci.yml)
 [![Security](https://github.com/nikarh/docker-traefik-cloudflare-gompanion/actions/workflows/security.yml/badge.svg)](https://github.com/nikarh/docker-traefik-cloudflare-gompanion/actions/workflows/security.yml)
+[![Latest Version](https://img.shields.io/github/v/tag/nikarh/docker-traefik-cloudflare-gompanion?sort=semver&label=latest%20version)](https://github.com/nikarh/docker-traefik-cloudflare-gompanion/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 A Go rewrite of [tiredofit/docker-traefik-cloudflare-companion](https://github.com/tiredofit/docker-traefik-cloudflare-companion) with drop-in environment compatibility.
@@ -98,20 +99,20 @@ All original environment variables are supported.
 | `RC_TYPE` | `CNAME` | DNS record type |
 | `ENABLE_DOCKER_POLL` | `TRUE` | Enable Docker inspection and events |
 | `DOCKER_SWARM_MODE` | `FALSE` | Enable swarm service discovery |
+| `DOCKER_CA_CERT_FILE` | | Custom CA certificate file used for Docker HTTPS/TCP connections |
+| `DOCKER_INSECURE_SKIP_VERIFY` | `FALSE` | Disable TLS certificate verification for Docker HTTPS/TCP connections |
 | `TRAEFIK_VERSION` | `2` | `1` or `2` rule parsing logic |
 | `TRAEFIK_FILTER` | | Optional value regex for filtered discovery |
 | `TRAEFIK_FILTER_LABEL` | `traefik.constraint` | Label key regex used with `TRAEFIK_FILTER` |
 | `ENABLE_TRAEFIK_POLL` | `FALSE` | Enable Traefik API polling |
 | `TRAEFIK_POLL_URL` | | Base URL for Traefik API |
 | `TRAEFIK_POLL_SECONDS` | `60` | Poll interval |
+| `TRAEFIK_POLL_CA_CERT_FILE` | | Custom CA certificate file for Traefik polling HTTPS requests |
 | `TRAEFIK_POLL_INSECURE_SKIP_VERIFY` | `FALSE` | Disable TLS certificate verification for Traefik polling HTTPS requests |
 | `TRAEFIK_INCLUDED_HOSTn` | `.*` | Include host regex list |
 | `TRAEFIK_EXCLUDED_HOSTn` | | Exclude host regex list |
 | `REFRESH_ENTRIES` | `FALSE` | Force update when content already matches |
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `VERBOSE`, `NOTICE`, `INFO`, `WARN`, `ERROR` |
-| `LOG_TYPE` | `BOTH` | Accepted for compatibility |
-| `LOG_PATH` | `/logs` | Accepted for compatibility |
-| `LOG_FILE` | `tcc.log` | Accepted for compatibility |
 
 ## Quick run example
 
@@ -124,6 +125,12 @@ docker run --rm --read-only \
   -v /var/run/docker.sock:/var/run/docker.sock \
   ghcr.io/nikarh/docker-traefik-cloudflare-gompanion:main
 ```
+
+## Acknowledgement
+
+Huge thanks to [tiredofit/docker-traefik-cloudflare-companion](https://github.com/tiredofit/docker-traefik-cloudflare-companion) and its maintainers.
+
+This project is, for the most part, a direct rewrite of that codebase from Python into Go, with compatibility and runtime-hardening improvements on top.
 
 ## License
 

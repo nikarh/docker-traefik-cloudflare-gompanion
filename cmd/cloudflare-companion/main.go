@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
@@ -35,6 +38,7 @@ type Config struct {
 	TraefikFilterKey              *regexp.Regexp
 	TraefikPollSecs               int
 	TraefikPollURL                string
+	TraefikPollCACertFile         string
 	TraefikVersion                string
 	RecordType                    string
 	TargetDomain                  string
@@ -44,7 +48,8 @@ type Config struct {
 	CloudflareEmail               string
 	CloudflareToken               string
 	LogLevel                      string
-	LogType                       string
+	DockerCACertFile              string
+	DockerInsecureSkipVerify      bool
 }
 
 type DomainConfig struct {
@@ -74,7 +79,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	logger := NewLogger(cfg.LogLevel, cfg.LogType)
+	logger := NewLogger(cfg.LogLevel)
 
 	cf, err := NewCloudflareAPI(cfg.CloudflareEmail, cfg.CloudflareToken, logger)
 	if err != nil {
@@ -89,7 +94,18 @@ func main() {
 	}
 
 	if cfg.EnableDockerPoll {
-		dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+		dockerOpts := []client.Opt{
+			client.FromEnv,
+			client.WithAPIVersionNegotiation(),
+		}
+		if dockerHTTPClient, ok, err := newDockerHTTPClient(cfg); err != nil {
+			logger.Errorf("failed to configure docker tls options: %v", err)
+			os.Exit(1)
+		} else if ok {
+			dockerOpts = append(dockerOpts, client.WithHTTPClient(dockerHTTPClient))
+		}
+
+		dockerClient, err := client.NewClientWithOpts(dockerOpts...)
 		if err != nil {
 			logger.Errorf("failed to initialize docker client: %v", err)
 			os.Exit(1)
@@ -109,6 +125,7 @@ func main() {
 	if cfg.EnableTraefikPoll {
 		logger.Debugf("Traefik Poll Url: %s", cfg.TraefikPollURL)
 		logger.Debugf("Traefik Poll Seconds: %d", cfg.TraefikPollSecs)
+		logger.Debugf("Traefik Poll CA Cert File: %s", cfg.TraefikPollCACertFile)
 		logger.Debugf("Traefik Poll Insecure Skip Verify: %v", cfg.TraefikPollInsecureSkipVerify)
 	}
 
@@ -153,10 +170,12 @@ func LoadConfigFromEnv() (Config, error) {
 	cfg.TraefikPollInsecureSkipVerify = parseBoolLikePython(os.Getenv("TRAEFIK_POLL_INSECURE_SKIP_VERIFY"), false)
 	cfg.RefreshEntries = parseBoolLikePython(os.Getenv("REFRESH_ENTRIES"), false)
 	cfg.LogLevel = defaultString(os.Getenv("LOG_LEVEL"), "INFO")
-	cfg.LogType = defaultString(os.Getenv("LOG_TYPE"), "BOTH")
 	cfg.TraefikPollSecs = parseIntOr(os.Getenv("TRAEFIK_POLL_SECONDS"), 60)
 	cfg.TraefikPollURL = os.Getenv("TRAEFIK_POLL_URL")
+	cfg.TraefikPollCACertFile = os.Getenv("TRAEFIK_POLL_CA_CERT_FILE")
 	cfg.TraefikVersion = defaultString(os.Getenv("TRAEFIK_VERSION"), "2")
+	cfg.DockerCACertFile = os.Getenv("DOCKER_CA_CERT_FILE")
+	cfg.DockerInsecureSkipVerify = parseBoolLikePython(os.Getenv("DOCKER_INSECURE_SKIP_VERIFY"), false)
 	cfg.RecordType = defaultString(os.Getenv("RC_TYPE"), "CNAME")
 	cfg.TargetDomain = os.Getenv("TARGET_DOMAIN")
 
@@ -485,7 +504,13 @@ func (c *Companion) checkServiceT2(id string, labels map[string]string, logger *
 
 func (c *Companion) checkTraefik(ctx context.Context, logger *Logger) map[string]int {
 	mappings := map[string]int{}
-	routers, statusCode, body, err := FetchTraefikRouters(ctx, c.cfg.TraefikPollURL, c.cfg.TraefikPollInsecureSkipVerify)
+	logger.Verbosef("Querying Traefik routers from %s", c.cfg.TraefikPollURL)
+	routers, statusCode, body, err := FetchTraefikRouters(
+		ctx,
+		c.cfg.TraefikPollURL,
+		c.cfg.TraefikPollInsecureSkipVerify,
+		c.cfg.TraefikPollCACertFile,
+	)
 	if err != nil {
 		logger.Errorf("failed to poll traefik routers: %v", err)
 		return mappings
@@ -563,6 +588,18 @@ func (c *Companion) pointDomain(name string, logger *Logger) bool {
 			logger.Errorf("%s list dns records failed: %v", name, err)
 			ok = false
 			continue
+		}
+		if len(records) == 0 {
+			logger.Verbosef("Domain %s: Cloudflare record exists=false, configuration change required=true", name)
+		} else {
+			requiresChange := c.cfg.RefreshEntries
+			for _, rec := range records {
+				if rec.Content != dom.TargetDomain {
+					requiresChange = true
+					break
+				}
+			}
+			logger.Verbosef("Domain %s: Cloudflare record exists=true, configuration change required=%v", name, requiresChange)
 		}
 
 		data := DNSRecordRequest{
@@ -734,6 +771,60 @@ func readSecretSpec(spec string) string {
 		}
 	}
 	return ""
+}
+
+func newDockerHTTPClient(cfg Config) (*http.Client, bool, error) {
+	dockerHost := strings.TrimSpace(os.Getenv("DOCKER_HOST"))
+	if dockerHost == "" {
+		dockerHost = "unix:///var/run/docker.sock"
+	}
+	parsed, err := url.Parse(dockerHost)
+	if err != nil {
+		return nil, false, fmt.Errorf("invalid DOCKER_HOST: %w", err)
+	}
+	if parsed.Scheme != "tcp" && parsed.Scheme != "https" {
+		return nil, false, nil
+	}
+	if strings.TrimSpace(cfg.DockerCACertFile) == "" && !cfg.DockerInsecureSkipVerify {
+		return nil, false, nil
+	}
+
+	tlsCfg, err := newTLSConfig(cfg.DockerCACertFile, cfg.DockerInsecureSkipVerify)
+	if err != nil {
+		return nil, false, err
+	}
+	return &http.Client{
+		Timeout: 20 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: tlsCfg,
+		},
+	}, true, nil
+}
+
+func newTLSConfig(caCertFile string, insecureSkipVerify bool) (*tls.Config, error) {
+	tlsCfg := &tls.Config{
+		InsecureSkipVerify: insecureSkipVerify,
+	}
+
+	caCertFile = strings.TrimSpace(caCertFile)
+	if caCertFile == "" {
+		return tlsCfg, nil
+	}
+
+	caPEM, err := os.ReadFile(caCertFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read CA cert file %s: %w", caCertFile, err)
+	}
+
+	rootCAs, err := x509.SystemCertPool()
+	if err != nil || rootCAs == nil {
+		rootCAs = x509.NewCertPool()
+	}
+	if ok := rootCAs.AppendCertsFromPEM(caPEM); !ok {
+		return nil, fmt.Errorf("failed to parse CA cert from %s", caCertFile)
+	}
+	tlsCfg.RootCAs = rootCAs
+	return tlsCfg, nil
 }
 
 func splitCleanCSV(value string) []string {
