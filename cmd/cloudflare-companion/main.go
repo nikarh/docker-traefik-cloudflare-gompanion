@@ -376,15 +376,9 @@ func (c *Companion) processDockerEvent(ctx context.Context, event events.Message
 	newMappings := map[string]int{}
 	evtType := event.Type
 	evtAction := string(event.Action)
-	if evtAction == "" {
-		evtAction = event.Status
-	}
 
 	if evtType == events.ContainerEventType && evtAction == "start" {
-		contID := event.ID
-		if contID == "" {
-			contID = event.Actor.ID
-		}
+		contID := event.Actor.ID
 		if contID == "" {
 			logger.Debugf("Skip container event without id")
 			return newMappings

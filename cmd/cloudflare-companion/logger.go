@@ -35,9 +35,7 @@ func NewLogger(levelRaw string, logType string) *Logger {
 		level = levelError
 	}
 
-	if strings.EqualFold(logType, "FILE") || strings.EqualFold(logType, "BOTH") {
-		// Keep env var compatibility, but do not write files to support read-only mode.
-	}
+	_ = logType
 
 	return &Logger{level: level, std: log.New(os.Stdout, "", 0)}
 }

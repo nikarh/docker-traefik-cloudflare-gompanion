@@ -130,7 +130,9 @@ func (cf *CloudflareAPI) doRequest(method string, endpoint string, body []byte) 
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
