@@ -310,7 +310,9 @@ func (c *Companion) GetInitialMappings(ctx context.Context, logger *Logger) (map
 		}
 		for _, svc := range services {
 			if c.cfg.TraefikVersion == "1" {
-				addToMappings(mappings, c.checkServiceT1(svc.ID, svc.Spec.TaskTemplate.ContainerSpec.Labels, logger))
+				if svc.Spec.TaskTemplate.ContainerSpec != nil {
+					addToMappings(mappings, c.checkServiceT1(svc.ID, svc.Spec.TaskTemplate.ContainerSpec.Labels, logger))
+				}
 			} else {
 				addToMappings(mappings, c.checkServiceT2(svc.ID, svc.Spec.Labels, logger))
 			}
@@ -406,7 +408,9 @@ func (c *Companion) processDockerEvent(ctx context.Context, event events.Message
 		svc, _, err := c.docker.ServiceInspectWithRaw(ctx, nodeID, swarm.ServiceInspectOptions{})
 		if err == nil {
 			if c.cfg.TraefikVersion == "1" {
-				addToMappings(newMappings, c.checkServiceT1(nodeID, svc.Spec.TaskTemplate.ContainerSpec.Labels, logger))
+				if svc.Spec.TaskTemplate.ContainerSpec != nil {
+					addToMappings(newMappings, c.checkServiceT1(nodeID, svc.Spec.TaskTemplate.ContainerSpec.Labels, logger))
+				}
 			} else {
 				addToMappings(newMappings, c.checkServiceT2(nodeID, svc.Spec.Labels, logger))
 			}
