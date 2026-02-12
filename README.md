@@ -25,6 +25,7 @@ These choices reduce attack surface, reduce dependency chain size, and make prod
 - Supports Traefik API polling mode.
 - Supports the original Cloudflare DNS sync behavior with `DRY_RUN` and `REFRESH_ENTRIES`.
 - Supports all original environment variables.
+- Handles Traefik API failures (error pages, invalid JSON, transient request errors) without crashing the service.
 
 ## Container tags
 
@@ -54,7 +55,7 @@ Recommended pattern is [11notes/docker-socket-proxy](https://github.com/11notes/
 
 ## Docker Compose
 
-Reference example: [`examples/compose.yml`](examples/compose.yml)
+Reference example: [`examples/docker-compose.yml`](examples/docker-compose.yml)
 
 This example runs `traefik-cloudflare-gompanion` behind socket-proxy, in read-only mode, and uses Docker secrets for Cloudflare credentials.
 
@@ -77,6 +78,21 @@ For any secret-enabled variable (for example `CF_TOKEN`, `CF_EMAIL`, `DOMAIN1_ZO
 If `<VAR>_FILE` contains a plain name instead of absolute path, `/run/secrets/<name>` is also attempted.
 
 This means you can use either explicit `_FILE` env vars or plain Docker secret names in `/run/secrets`.
+
+## Cloudflare auth modes and common pitfall
+
+Cloudflare has two auth modes, and this project keeps the same behavior as the original tool:
+
+1. Token mode (recommended):
+   - set `CF_TOKEN` to your API token
+   - do not set `CF_EMAIL`
+2. Global API key mode:
+   - set `CF_EMAIL`
+   - set `CF_TOKEN` to your Global API Key
+
+Important: if `CF_EMAIL` is set while `CF_TOKEN` contains a scoped API token, Cloudflare will reject auth. This is a common misconfiguration and is easy to miss when migrating setups.
+
+If you use scoped tokens, leave `CF_EMAIL` unset.
 
 ## Environment variables
 

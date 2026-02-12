@@ -132,11 +132,15 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	initialMappings, err := comp.GetInitialMappings(ctx, logger)
-	if err != nil {
-		logger.Errorf("failed to get initial mappings: %v", err)
-		os.Exit(1)
-	}
+	initialMappings := map[string]int{}
+	runWithRecover(logger, "initial-mapping", func() {
+		mappings, err := comp.GetInitialMappings(ctx, logger)
+		if err != nil {
+			logger.Errorf("failed to get initial mappings: %v", err)
+			return
+		}
+		initialMappings = mappings
+	})
 	comp.SyncMappings(initialMappings, logger)
 
 	wg := &sync.WaitGroup{}
@@ -358,7 +362,9 @@ func (c *Companion) RunTraefikPoller(ctx context.Context, logger *Logger) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			c.SyncMappings(c.checkTraefik(ctx, logger), logger)
+			runWithRecover(logger, "traefik-poller", func() {
+				c.SyncMappings(c.checkTraefik(ctx, logger), logger)
+			})
 		}
 	}
 }
@@ -387,9 +393,11 @@ func (c *Companion) RunDockerEventWatch(ctx context.Context, logger *Logger) {
 				if !ok {
 					goto reconnect
 				}
-				since = strconv.FormatInt(ev.Time, 10)
-				newMappings := c.processDockerEvent(ctx, ev, logger)
-				c.SyncMappings(newMappings, logger)
+				runWithRecover(logger, "docker-event-watch", func() {
+					since = strconv.FormatInt(ev.Time, 10)
+					newMappings := c.processDockerEvent(ctx, ev, logger)
+					c.SyncMappings(newMappings, logger)
+				})
 			}
 		}
 	reconnect:
@@ -877,4 +885,13 @@ func validURI(raw string) bool {
 		return false
 	}
 	return u.Scheme != "" && u.Host != ""
+}
+
+func runWithRecover(logger *Logger, scope string, fn func()) {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Errorf("recovered panic in %s: %v", scope, r)
+		}
+	}()
+	fn()
 }
