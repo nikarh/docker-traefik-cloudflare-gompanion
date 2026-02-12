@@ -1,13 +1,20 @@
 # syntax=docker/dockerfile:1.7
 
-FROM golang:1.26 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.24 AS builder
 WORKDIR /src
+
+ARG TARGETOS
+ARG TARGETARCH
+ARG TARGETVARIANT
 
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY cmd ./cmd
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w -extldflags "-static"' -o /out/cloudflare-companion ./cmd/cloudflare-companion
+RUN set -eux; \
+    GOARM=""; \
+    if [ "$TARGETARCH" = "arm" ] && [ -n "$TARGETVARIANT" ]; then GOARM="${TARGETVARIANT#v}"; fi; \
+    CGO_ENABLED=0 GOOS="${TARGETOS}" GOARCH="${TARGETARCH}" GOARM="${GOARM}" go build -trimpath -ldflags='-s -w -extldflags "-static"' -o /out/cloudflare-companion ./cmd/cloudflare-companion
 
 FROM scratch
 COPY --from=builder /out/cloudflare-companion /cloudflare-companion
