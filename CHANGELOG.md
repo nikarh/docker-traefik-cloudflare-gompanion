@@ -1,20 +1,19 @@
 # Changelog
 
 
-## v1.0.1 - 2026-02-12
+## v1.0.2 - 2026-02-12
 
 
 ### Bug Fixes
 
-- Build image binaries for target architecture (bae4fcf)
+- Harden runtime error handling and clarify auth pitfall (a29e77c)
 
 
-### CI
+### Features
 
-- Publish semver image tags and main tag (4b792df)
+- Support default docker secrets and expand documentation (92c1220)
 
+- Add ca certs and traefik insecure tls option (a66e224)
 
-### Documentation
-
-- Expand runtime security and image tagging guidance (a905626)
+- Add tls options and verbose discovery logging (631cdd6)
 
