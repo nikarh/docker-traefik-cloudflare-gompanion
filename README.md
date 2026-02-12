@@ -11,6 +11,7 @@ A Go rewrite of [tiredofit/docker-traefik-cloudflare-companion](https://github.c
 This image keeps the behavior of the original tool, but focuses on hardened runtime defaults:
 - Static Go binary instead of Python runtime.
 - `scratch` final image with very small footprint (typically under 10 MB).
+- CA certificate bundle is included in the runtime image for HTTPS calls.
 - Runs as non-root user `65532:65532` by default.
 - Works in read-only containers because it does not require writing to disk.
 
@@ -103,6 +104,7 @@ All original environment variables are supported.
 | `ENABLE_TRAEFIK_POLL` | `FALSE` | Enable Traefik API polling |
 | `TRAEFIK_POLL_URL` | | Base URL for Traefik API |
 | `TRAEFIK_POLL_SECONDS` | `60` | Poll interval |
+| `TRAEFIK_POLL_INSECURE_SKIP_VERIFY` | `FALSE` | Disable TLS certificate verification for Traefik polling HTTPS requests |
 | `TRAEFIK_INCLUDED_HOSTn` | `.*` | Include host regex list |
 | `TRAEFIK_EXCLUDED_HOSTn` | | Exclude host regex list |
 | `REFRESH_ENTRIES` | `FALSE` | Force update when content already matches |

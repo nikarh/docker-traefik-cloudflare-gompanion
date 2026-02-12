@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,8 +17,15 @@ type TraefikRouter struct {
 	Status string `json:"status"`
 }
 
-func FetchTraefikRouters(ctx context.Context, baseURL string) ([]TraefikRouter, int, string, error) {
-	httpClient := &http.Client{Timeout: 15 * time.Second}
+func FetchTraefikRouters(ctx context.Context, baseURL string, insecureSkipVerify bool) ([]TraefikRouter, int, string, error) {
+	httpClient := &http.Client{
+		Timeout: 15 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: insecureSkipVerify,
+			},
+		},
+	}
 	url := strings.TrimRight(baseURL, "/") + "/api/http/routers"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

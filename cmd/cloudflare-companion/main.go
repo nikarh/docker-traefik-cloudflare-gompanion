@@ -23,27 +23,28 @@ import (
 )
 
 type Config struct {
-	DryRun            bool
-	DefaultTTL        int
-	EnableDockerPoll  bool
-	DockerSwarmMode   bool
-	EnableTraefikPoll bool
-	RefreshEntries    bool
-	TraefikFilter     *regexp.Regexp
-	TraefikFilterRaw  string
-	TraefikFilterKey  *regexp.Regexp
-	TraefikPollSecs   int
-	TraefikPollURL    string
-	TraefikVersion    string
-	RecordType        string
-	TargetDomain      string
-	Domains           []DomainConfig
-	IncludedHosts     []*regexp.Regexp
-	ExcludedHosts     []*regexp.Regexp
-	CloudflareEmail   string
-	CloudflareToken   string
-	LogLevel          string
-	LogType           string
+	DryRun                        bool
+	DefaultTTL                    int
+	EnableDockerPoll              bool
+	DockerSwarmMode               bool
+	EnableTraefikPoll             bool
+	TraefikPollInsecureSkipVerify bool
+	RefreshEntries                bool
+	TraefikFilter                 *regexp.Regexp
+	TraefikFilterRaw              string
+	TraefikFilterKey              *regexp.Regexp
+	TraefikPollSecs               int
+	TraefikPollURL                string
+	TraefikVersion                string
+	RecordType                    string
+	TargetDomain                  string
+	Domains                       []DomainConfig
+	IncludedHosts                 []*regexp.Regexp
+	ExcludedHosts                 []*regexp.Regexp
+	CloudflareEmail               string
+	CloudflareToken               string
+	LogLevel                      string
+	LogType                       string
 }
 
 type DomainConfig struct {
@@ -108,6 +109,7 @@ func main() {
 	if cfg.EnableTraefikPoll {
 		logger.Debugf("Traefik Poll Url: %s", cfg.TraefikPollURL)
 		logger.Debugf("Traefik Poll Seconds: %d", cfg.TraefikPollSecs)
+		logger.Debugf("Traefik Poll Insecure Skip Verify: %v", cfg.TraefikPollInsecureSkipVerify)
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -148,6 +150,7 @@ func LoadConfigFromEnv() (Config, error) {
 	cfg.EnableDockerPoll = parseBoolLikePython(os.Getenv("ENABLE_DOCKER_POLL"), true)
 	cfg.DockerSwarmMode = parseBoolLikePython(os.Getenv("DOCKER_SWARM_MODE"), false)
 	cfg.EnableTraefikPoll = parseBoolLikePython(os.Getenv("ENABLE_TRAEFIK_POLL"), false)
+	cfg.TraefikPollInsecureSkipVerify = parseBoolLikePython(os.Getenv("TRAEFIK_POLL_INSECURE_SKIP_VERIFY"), false)
 	cfg.RefreshEntries = parseBoolLikePython(os.Getenv("REFRESH_ENTRIES"), false)
 	cfg.LogLevel = defaultString(os.Getenv("LOG_LEVEL"), "INFO")
 	cfg.LogType = defaultString(os.Getenv("LOG_TYPE"), "BOTH")
@@ -482,7 +485,7 @@ func (c *Companion) checkServiceT2(id string, labels map[string]string, logger *
 
 func (c *Companion) checkTraefik(ctx context.Context, logger *Logger) map[string]int {
 	mappings := map[string]int{}
-	routers, statusCode, body, err := FetchTraefikRouters(ctx, c.cfg.TraefikPollURL)
+	routers, statusCode, body, err := FetchTraefikRouters(ctx, c.cfg.TraefikPollURL, c.cfg.TraefikPollInsecureSkipVerify)
 	if err != nil {
 		logger.Errorf("failed to poll traefik routers: %v", err)
 		return mappings
