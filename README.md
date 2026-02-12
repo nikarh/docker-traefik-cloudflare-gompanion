@@ -4,62 +4,81 @@
 [![Security](https://github.com/nikarh/docker-traefik-cloudflare-gompanion/actions/workflows/security.yml/badge.svg)](https://github.com/nikarh/docker-traefik-cloudflare-gompanion/actions/workflows/security.yml)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-A Go reimplementation of [`docker-traefik-cloudflare-companion`](https://github.com/tiredofit/docker-traefik-cloudflare-companion) intended to be a drop-in replacement for the original `cloudflare-companion` script.
+A Go rewrite of [tiredofit/docker-traefik-cloudflare-companion](https://github.com/tiredofit/docker-traefik-cloudflare-companion) with drop-in environment compatibility.
 
-It preserves original behavior and includes upstream fixes:
-- [PR #125](https://github.com/tiredofit/docker-traefik-cloudflare-companion/pull/125/changes): robust Traefik API response validation and JSON decode handling
-- [PR #127](https://github.com/tiredofit/docker-traefik-cloudflare-companion/pull/127/changes): corrected Docker event listener handling for container and service events
+## Why this project
 
-## Why this rewrite exists
+This image keeps the behavior of the original tool, but focuses on hardened runtime defaults:
+- Static Go binary instead of Python runtime.
+- `scratch` final image with very small footprint (typically under 10 MB).
+- Runs as non-root user `65532:65532` by default.
+- Works in read-only containers because it does not require writing to disk.
 
-- Go static binary: no Python runtime, lower startup overhead, simpler supply chain.
-- `scratch` image: minimal attack surface and very small footprint (typically sub-10MB compressed image layers).
-- Non-root by default: container runs as `uid:gid 65532:65532`.
-- Read-only-friendly runtime: no required filesystem writes, suitable for hardened container setups.
+These choices reduce attack surface, reduce dependency chain size, and make production hardening easier.
+
+## Compatibility scope
+
+- Supports Traefik v1 and v2 label discovery from Docker containers.
+- Supports Docker Swarm service discovery.
+- Supports Traefik API polling mode.
+- Supports the original Cloudflare DNS sync behavior with `DRY_RUN` and `REFRESH_ENTRIES`.
+- Supports all original environment variables.
 
 ## Container tags
 
-Published to `ghcr.io/nikarh/docker-traefik-cloudflare-gompanion`.
+Published image: `ghcr.io/nikarh/docker-traefik-cloudflare-gompanion`
 
-Main branch publish tags:
-- `:main` points to the latest successful build from `main`.
-- `:latest` also points to the latest successful build from `main`.
-- `:sha-<commit_sha>` is an immutable CI build tag for a specific commit.
+Main branch tags:
+- `:main` latest build from `main`.
+- `:latest` latest build from `main`.
+- `:sha-<commit>` immutable commit build.
 
-Release publish tags:
-- `:<ref tag>` for the release git tag (example: `:v1.4.2`).
-- `:<major.minor.patch>` for exact semver (example: `:1.4.2`).
-- `:<major.minor>` moving minor line (example: `:1.4`).
-- `:<major>` moving major line (example: `:1`).
-- `:latest` points to the newest release publish.
+Release tags:
+- `:v<major>.<minor>.<patch>` release git tag (for example `:v1.2.3`).
+- `:<major>.<minor>.<patch>` exact semver image tag (`:1.2.3`).
+- `:<major>.<minor>` moving minor line (`:1.2`).
+- `:<major>` moving major line (`:1`).
+- `:latest` points to the latest released version.
 
-## Security and Docker socket guidance
+## Runtime user and Docker socket access
 
-The container runs as `65532:65532`, so direct Docker socket usage requires socket permissions that allow this user.
+The container runs as `uid:gid 65532:65532`.
 
-Directly mounting `/var/run/docker.sock` gives effectively root-equivalent control of the host Docker daemon. That is a major security risk and strongly discouraged.
+If you mount the host Docker socket directly, this user must have permission to access that socket. On many hosts this requires custom group mapping or running as a different uid/gid.
 
-Recommended approach: run through [11notes/docker-socket-proxy](https://github.com/11notes/docker-socket-proxy) and only expose required Docker API capabilities.
+Mounting `/var/run/docker.sock` directly is a major security risk and strongly discouraged. It effectively grants privileged host control to the container.
 
-## Behavior compatibility
+Recommended pattern is [11notes/docker-socket-proxy](https://github.com/11notes/docker-socket-proxy), exposing only the API surface you actually need.
 
-The following behavior from the original companion is supported:
-- Docker container scanning for Traefik v1 and v2 labels
-- Docker swarm service scanning
-- Optional Traefik API polling
-- Cloudflare DNS create/update behavior with `DRY_RUN` and `REFRESH_ENTRIES`
-- `*_FILE` secret support for sensitive values (`CF_TOKEN`, `CF_EMAIL`, `DOMAINn_ZONE_ID`)
-- Mapping source precedence (Docker event/discovery mappings preferred over Traefik poll mappings)
+## Docker Compose
 
-## Differences from original
+Reference example: [`examples/compose.yml`](examples/compose.yml)
 
-- Logging format is different.
-- `LOG_TYPE=FILE` and `LOG_TYPE=BOTH` are accepted for compatibility, but this implementation does not write log files.
-- Implementation is Go, not Python.
+This example runs `traefik-cloudflare-gompanion` behind socket-proxy, in read-only mode, and uses Docker secrets for Cloudflare credentials.
+
+## Secrets and environment variable behavior
+
+This project supports all original env vars and secret patterns.
+
+### Secret resolution order
+
+For any secret-enabled variable (for example `CF_TOKEN`, `CF_EMAIL`, `DOMAIN1_ZONE_ID`), value resolution is:
+
+1. `<VAR>_FILE` path, then `<var>_FILE` path.
+2. Docker default secret paths:
+   - `/run/secrets/<VAR>`
+   - `/run/secrets/<var>`
+3. Environment variable values:
+   - `<VAR>`
+   - `<var>`
+
+If `<VAR>_FILE` contains a plain name instead of absolute path, `/run/secrets/<name>` is also attempted.
+
+This means you can use either explicit `_FILE` env vars or plain Docker secret names in `/run/secrets`.
 
 ## Environment variables
 
-All environment variables from the original tool are supported.
+All original environment variables are supported.
 
 | Variable | Default | Description |
 |---|---:|---|
@@ -92,45 +111,17 @@ All environment variables from the original tool are supported.
 | `LOG_PATH` | `/logs` | Accepted for compatibility |
 | `LOG_FILE` | `tcc.log` | Accepted for compatibility |
 
-## Usage
-
-### Recommended with Docker Socket Proxy
-
-```bash
-docker run --rm \
-  -e CF_TOKEN=... \
-  -e TARGET_DOMAIN=lb.example.net \
-  -e DOMAIN1=example.com \
-  -e DOMAIN1_ZONE_ID=... \
-  -e DOCKER_HOST=tcp://docker-socket-proxy:2375 \
-  ghcr.io/nikarh/docker-traefik-cloudflare-gompanion:main
-```
-
-### Direct Docker socket mount (discouraged)
+## Quick run example
 
 ```bash
 docker run --rm --read-only \
   -e CF_TOKEN=... \
   -e TARGET_DOMAIN=lb.example.net \
-  -e DOMAIN1=example.com \
+  -e DOMAIN1=example.net \
   -e DOMAIN1_ZONE_ID=... \
   -v /var/run/docker.sock:/var/run/docker.sock \
   ghcr.io/nikarh/docker-traefik-cloudflare-gompanion:main
 ```
-
-### Build local binary
-
-```bash
-CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o cloudflare-companion ./cmd/cloudflare-companion
-./cloudflare-companion
-```
-
-## CI and release
-
-- `CI` workflow (push to `main`, pull requests): fmt, tests, lint, multi-arch binary build, and GHCR image publish.
-- `Release` workflow (manual): bump semantic version (`major`, `minor`, `patch`), generate changelog with `git-cliff`, create GitHub release, and publish semver Docker tags.
-- `Security` workflow: CodeQL analysis.
-- Dependabot: automated updates for Actions, Go modules, and Docker definitions.
 
 ## License
 

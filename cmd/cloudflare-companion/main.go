@@ -56,6 +56,8 @@ type DomainConfig struct {
 	ExcludedSubDomains []string
 }
 
+var defaultSecretDirs = []string{"/run/secrets"}
+
 type Companion struct {
 	cfg     Config
 	cf      *CloudflareAPI
@@ -674,16 +676,61 @@ func isMatching(host string, regexes []*regexp.Regexp) bool {
 }
 
 func getSecretByEnv(name string) string {
-	if file := os.Getenv(name + "_FILE"); file != "" {
-		contents, err := os.ReadFile(file)
-		if err == nil {
-			value := strings.TrimSpace(string(contents))
-			if value != "" {
-				return value
-			}
+	lowerName := strings.ToLower(name)
+
+	implicitSecretPaths := make([]string, 0, len(defaultSecretDirs)*2)
+	for _, dir := range defaultSecretDirs {
+		implicitSecretPaths = append(implicitSecretPaths, dir+"/"+name, dir+"/"+lowerName)
+	}
+
+	fileSpecs := []string{
+		os.Getenv(name + "_FILE"),
+		os.Getenv(lowerName + "_FILE"),
+	}
+	fileSpecs = append(fileSpecs, implicitSecretPaths...)
+	for _, spec := range fileSpecs {
+		if value := readSecretSpec(spec); value != "" {
+			return value
 		}
 	}
-	return strings.TrimSpace(os.Getenv(name))
+
+	envCandidates := []string{
+		os.Getenv(name),
+		os.Getenv(lowerName),
+	}
+	for _, value := range envCandidates {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func readSecretSpec(spec string) string {
+	spec = strings.TrimSpace(spec)
+	if spec == "" {
+		return ""
+	}
+
+	paths := []string{spec}
+	if !strings.HasPrefix(spec, "/") {
+		for _, dir := range defaultSecretDirs {
+			paths = append(paths, dir+"/"+spec)
+		}
+	}
+
+	for _, path := range paths {
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		value := strings.TrimSpace(string(contents))
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func splitCleanCSV(value string) []string {

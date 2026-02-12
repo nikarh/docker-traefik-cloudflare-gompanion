@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -31,4 +33,40 @@ func TestParseBoolLikePython(t *testing.T) {
 	require.True(t, parseBoolLikePython("TRUE", false))
 	require.False(t, parseBoolLikePython("FALSE", true))
 	require.True(t, parseBoolLikePython("not-a-bool", true))
+}
+
+func TestGetSecretByEnvFromDefaultRunSecrets(t *testing.T) {
+	const secretName = "CF_TOKEN"
+	tempDir := t.TempDir()
+	oldDirs := defaultSecretDirs
+	defaultSecretDirs = []string{tempDir}
+	t.Cleanup(func() {
+		defaultSecretDirs = oldDirs
+	})
+
+	secretPath := filepath.Join(tempDir, secretName)
+	err := os.WriteFile(secretPath, []byte("from-default-secret-file\n"), 0o600)
+	require.NoError(t, err)
+
+	t.Setenv(secretName, "")
+	t.Setenv(secretName+"_FILE", "")
+
+	value := getSecretByEnv(secretName)
+	require.Equal(t, "from-default-secret-file", value)
+}
+
+func TestGetSecretByEnvFromFileEnvWithName(t *testing.T) {
+	tempFile, err := os.CreateTemp("", "gompanion-secret-*")
+	require.NoError(t, err)
+	defer func() { _ = os.Remove(tempFile.Name()) }()
+
+	_, err = tempFile.WriteString("from-file-env\n")
+	require.NoError(t, err)
+	require.NoError(t, tempFile.Close())
+
+	t.Setenv("CF_EMAIL_FILE", tempFile.Name())
+	t.Setenv("CF_EMAIL", "")
+
+	value := getSecretByEnv("CF_EMAIL")
+	require.Equal(t, "from-file-env", value)
 }

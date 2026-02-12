@@ -1,0 +1,38 @@
+services:
+  docker-socket-proxy:
+    image: 11notes/socket-proxy:2
+    container_name: docker-socket-proxy
+    read_only: true
+    user: "0:0"
+    volumes:
+      - /var/run/docker.sock:/run/docker.sock:ro
+      - socket-proxy:/run/proxy
+    restart: unless-stopped
+
+  traefik-cloudflare-gompanion:
+    image: ghcr.io/nikarh/docker-traefik-cloudflare-gompanion:main
+    container_name: traefik-cloudflare-gompanion
+    read_only: true
+    depends_on:
+      - docker-socket-proxy
+    environment:
+      DOCKER_HOST: tcp://docker-socket-proxy:2375
+      TRAEFIK_VERSION: "2"
+      CF_TOKEN_FILE: /run/secrets/cf_token
+      TARGET_DOMAIN: lb.example.net
+      DOMAIN1: example.net
+      DOMAIN1_ZONE_ID_FILE: /run/secrets/domain1_zone_id
+      DOMAIN1_PROXIED: "false"
+    secrets:
+      - cf_token
+      - domain1_zone_id
+    restart: unless-stopped
+
+secrets:
+  cf_token:
+    file: ./secrets/cf_token
+  domain1_zone_id:
+    file: ./secrets/domain1_zone_id
+
+volumes:
+  socket-proxy:
