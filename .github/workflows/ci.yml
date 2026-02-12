@@ -109,5 +109,6 @@ jobs:
           platforms: linux/amd64,linux/arm64/v8,linux/arm/v7
           push: true
           tags: |
+            ghcr.io/${{ github.repository }}:main
             ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:main-${{ github.sha }}
+            ghcr.io/${{ github.repository }}:sha-${{ github.sha }}

@@ -29,7 +29,7 @@ jobs:
       - name: Calculate next version
         id: version
         run: |
-          latest_tag=$(git tag --list 'v*' --sort=-version:refname | head -n1)
+          latest_tag=$(git tag --list 'v*.*.*' --sort=-version:refname | head -n1)
           if [ -z "$latest_tag" ]; then
             latest_tag="v0.0.0"
           fi
@@ -43,9 +43,20 @@ jobs:
             patch)
               patch=$((patch+1)) ;;
           esac
-          new_tag="v${major}.${minor}.${patch}"
-          echo "latest_tag=$latest_tag" >> "$GITHUB_OUTPUT"
+
+          semver="${major}.${minor}.${patch}"
+          semver_minor="${major}.${minor}"
+          semver_major="${major}"
+          new_tag="v${semver}"
+          major_tag="v${semver_major}"
+          minor_tag="v${semver_minor}"
+
           echo "new_tag=$new_tag" >> "$GITHUB_OUTPUT"
+          echo "semver=$semver" >> "$GITHUB_OUTPUT"
+          echo "semver_minor=$semver_minor" >> "$GITHUB_OUTPUT"
+          echo "semver_major=$semver_major" >> "$GITHUB_OUTPUT"
+          echo "major_tag=$major_tag" >> "$GITHUB_OUTPUT"
+          echo "minor_tag=$minor_tag" >> "$GITHUB_OUTPUT"
 
       - name: Generate changelog
         id: changelog
@@ -54,7 +65,7 @@ jobs:
           config: cliff.toml
           args: --tag ${{ steps.version.outputs.new_tag }} --unreleased
 
-      - name: Update CHANGELOG.md
+      - name: Update changelog file
         run: |
           printf "%s\n" "${{ steps.changelog.outputs.content }}" > CHANGELOG.md
 
@@ -64,24 +75,16 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add CHANGELOG.md
           git commit -m "docs: update changelog for ${{ steps.version.outputs.new_tag }}" || true
+          git push origin main
 
-      - name: Create and push tag
+      - name: Create and push release tags
         run: |
           git tag "${{ steps.version.outputs.new_tag }}"
-          git push origin main
+          git tag -f "${{ steps.version.outputs.minor_tag }}"
+          git tag -f "${{ steps.version.outputs.major_tag }}"
           git push origin "${{ steps.version.outputs.new_tag }}"
-
-      - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.version.outputs.new_tag }}
-          name: ${{ steps.version.outputs.new_tag }}
-          body: |
-            ${{ steps.changelog.outputs.content }}
-
-            Images:
-            - ghcr.io/${{ github.repository }}:${{ steps.version.outputs.new_tag }}
-            - ghcr.io/${{ github.repository }}:latest
+          git push origin -f "${{ steps.version.outputs.minor_tag }}"
+          git push origin -f "${{ steps.version.outputs.major_tag }}"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -105,4 +108,22 @@ jobs:
           push: true
           tags: |
             ghcr.io/${{ github.repository }}:${{ steps.version.outputs.new_tag }}
+            ghcr.io/${{ github.repository }}:${{ steps.version.outputs.semver }}
+            ghcr.io/${{ github.repository }}:${{ steps.version.outputs.semver_minor }}
+            ghcr.io/${{ github.repository }}:${{ steps.version.outputs.semver_major }}
             ghcr.io/${{ github.repository }}:latest
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.new_tag }}
+          name: ${{ steps.version.outputs.new_tag }}
+          body: |
+            ${{ steps.changelog.outputs.content }}
+
+            Container tags:
+            - ghcr.io/${{ github.repository }}:${{ steps.version.outputs.new_tag }}
+            - ghcr.io/${{ github.repository }}:${{ steps.version.outputs.semver }}
+            - ghcr.io/${{ github.repository }}:${{ steps.version.outputs.semver_minor }}
+            - ghcr.io/${{ github.repository }}:${{ steps.version.outputs.semver_major }}
+            - ghcr.io/${{ github.repository }}:latest
