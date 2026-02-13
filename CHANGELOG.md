@@ -1,19 +1,10 @@
 # Changelog
 
 
-## v1.0.2 - 2026-02-12
+## v1.0.3 - 2026-02-13
 
 
 ### Bug Fixes
 
-- Harden runtime error handling and clarify auth pitfall (a29e77c)
-
-
-### Features
-
-- Support default docker secrets and expand documentation (92c1220)
-
-- Add ca certs and traefik insecure tls option (a66e224)
-
-- Add tls options and verbose discovery logging (631cdd6)
+- Reduce info logs to change-related events (259f59b)
 
