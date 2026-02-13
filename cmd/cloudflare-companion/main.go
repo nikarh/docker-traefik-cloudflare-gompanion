@@ -454,7 +454,7 @@ func (c *Companion) checkContainerT1(id string, labels map[string]string, logger
 	for key, value := range labels {
 		if regexp.MustCompile(`traefik.*.frontend.rule`).MatchString(key) {
 			for _, host := range parseTraefikV1HostRule(value) {
-				logger.Infof("Found Container ID: %s with Hostname %s", id, host)
+				logger.Verbosef("Found Container ID: %s with Hostname %s", id, host)
 				mappings[host] = 1
 			}
 		}
@@ -470,7 +470,7 @@ func (c *Companion) checkServiceT1(id string, labels map[string]string, logger *
 	for key, value := range labels {
 		if regexp.MustCompile(`traefik.*.frontend.rule`).MatchString(key) {
 			for _, host := range parseTraefikV1HostRule(value) {
-				logger.Infof("Found Service ID: %s with Hostname %s", id, host)
+				logger.Verbosef("Found Service ID: %s with Hostname %s", id, host)
 				mappings[host] = 1
 			}
 		}
@@ -486,7 +486,7 @@ func (c *Companion) checkContainerT2(id string, labels map[string]string, logger
 	for key, value := range labels {
 		if regexp.MustCompile(`traefik.*?\.rule`).MatchString(key) && strings.Contains(value, "Host") {
 			for _, host := range parseTraefikV2Rule(value) {
-				logger.Infof("Found Service ID: %s with Hostname %s", id, host)
+				logger.Verbosef("Found Service ID: %s with Hostname %s", id, host)
 				mappings[host] = 1
 			}
 		}
@@ -502,7 +502,7 @@ func (c *Companion) checkServiceT2(id string, labels map[string]string, logger *
 	for key, value := range labels {
 		if regexp.MustCompile(`traefik.*?\.rule`).MatchString(key) && strings.Contains(value, "Host") {
 			for _, host := range parseTraefikV2Rule(value) {
-				logger.Infof("Found Service ID: %s with Hostname %s", id, host)
+				logger.Verbosef("Found Service ID: %s with Hostname %s", id, host)
 				mappings[host] = 1
 			}
 		}
@@ -542,7 +542,7 @@ func (c *Companion) checkTraefik(ctx context.Context, logger *Logger) map[string
 			if isMatching(host, c.cfg.ExcludedHosts) {
 				continue
 			}
-			logger.Infof("Found Traefik Router Name: %s with Hostname %s", router.Name, host)
+			logger.Verbosef("Found Traefik Router Name: %s with Hostname %s", router.Name, host)
 			mappings[host] = 2
 		}
 	}
@@ -587,7 +587,7 @@ func (c *Companion) pointDomain(name string, logger *Logger) bool {
 			continue
 		}
 		if isDomainExcluded(name, dom) {
-			logger.Infof("Ignoring %s because it falls under excluded sub domain", name)
+			logger.Verbosef("Ignoring %s because it falls under excluded sub domain", name)
 			continue
 		}
 
@@ -646,7 +646,7 @@ func (c *Companion) pointDomain(name string, logger *Logger) bool {
 					logger.Infof("Updated existing record: %s to point to %s", name, dom.TargetDomain)
 				}
 			} else {
-				logger.Infof("Existing record: %s already points to %s", name, dom.TargetDomain)
+				logger.Verbosef("Existing record: %s already points to %s", name, dom.TargetDomain)
 			}
 		}
 	}
