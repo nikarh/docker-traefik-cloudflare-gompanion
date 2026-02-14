@@ -13,7 +13,7 @@ This image keeps the behavior of the original tool, but focuses on hardened runt
 - Static Go binary instead of Python runtime.
 - `scratch` final image with very small footprint (typically under 10 MB).
 - CA certificate bundle is included in the runtime image for HTTPS calls.
-- Runs as non-root user `65532:65532` by default.
+- Runs as non-root user `65534:65534` by default.
 - Works in read-only containers because it does not require writing to disk.
 
 These choices reduce attack surface, reduce dependency chain size, and make production hardening easier.
@@ -45,7 +45,7 @@ Release tags:
 
 ## Runtime user and Docker socket access
 
-The container runs as `uid:gid 65532:65532`.
+The container runs as `uid:gid 65534:65534`.
 
 If you mount the host Docker socket directly, this user must have permission to access that socket. On many hosts this requires custom group mapping or running as a different uid/gid.
 

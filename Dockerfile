@@ -22,5 +22,5 @@ RUN apk add --no-cache ca-certificates
 FROM scratch
 COPY --from=builder /out/cloudflare-companion /cloudflare-companion
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-USER 65532:65532
+USER 65534:65534
 ENTRYPOINT ["/cloudflare-companion"]
