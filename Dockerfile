@@ -16,7 +16,7 @@ RUN set -eux; \
     if [ "$TARGETARCH" = "arm" ] && [ -n "$TARGETVARIANT" ]; then GOARM="${TARGETVARIANT#v}"; fi; \
     CGO_ENABLED=0 GOOS="${TARGETOS}" GOARCH="${TARGETARCH}" GOARM="${GOARM}" go build -trimpath -ldflags='-s -w -extldflags "-static"' -o /out/cloudflare-companion ./cmd/cloudflare-companion
 
-FROM alpine:3.22 AS certs
+FROM alpine:3.23 AS certs
 RUN apk add --no-cache ca-certificates
 
 FROM scratch
