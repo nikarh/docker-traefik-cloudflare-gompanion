@@ -2,13 +2,25 @@ version: 2
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
+    rebase-strategy: "auto"
     schedule:
       interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
   - package-ecosystem: "gomod"
     directory: "/"
+    rebase-strategy: "auto"
     schedule:
       interval: weekly
+    groups:
+      go-minor-patch:
+        update-types: ["minor", "patch"]
   - package-ecosystem: "docker"
     directory: "/"
+    rebase-strategy: "auto"
     schedule:
       interval: weekly
+    groups:
+      docker:
+        patterns: ["*"]

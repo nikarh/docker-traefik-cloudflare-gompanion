@@ -18,11 +18,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/events"
-	"github.com/docker/docker/api/types/filters"
-	"github.com/docker/docker/api/types/swarm"
-	"github.com/docker/docker/client"
+	"github.com/moby/moby/api/types/events"
+	"github.com/moby/moby/client"
 )
 
 type Config struct {
@@ -96,7 +93,6 @@ func main() {
 	if cfg.EnableDockerPoll {
 		dockerOpts := []client.Opt{
 			client.FromEnv,
-			client.WithAPIVersionNegotiation(),
 		}
 		if dockerHTTPClient, ok, err := newDockerHTTPClient(cfg); err != nil {
 			logger.Errorf("failed to configure docker tls options: %v", err)
@@ -105,7 +101,7 @@ func main() {
 			dockerOpts = append(dockerOpts, client.WithHTTPClient(dockerHTTPClient))
 		}
 
-		dockerClient, err := client.NewClientWithOpts(dockerOpts...)
+		dockerClient, err := client.New(dockerOpts...)
 		if err != nil {
 			logger.Errorf("failed to initialize docker client: %v", err)
 			os.Exit(1)
@@ -314,15 +310,16 @@ func (c *Companion) GetInitialMappings(ctx context.Context, logger *Logger) (map
 	mappings := map[string]int{}
 
 	if c.cfg.EnableDockerPoll {
-		containers, err := c.docker.ContainerList(ctx, container.ListOptions{})
+		containers, err := c.docker.ContainerList(ctx, client.ContainerListOptions{})
 		if err != nil {
 			return nil, err
 		}
-		for _, ctr := range containers {
-			json, err := c.docker.ContainerInspect(ctx, ctr.ID)
+		for _, ctr := range containers.Items {
+			inspect, err := c.docker.ContainerInspect(ctx, ctr.ID, client.ContainerInspectOptions{})
 			if err != nil {
 				continue
 			}
+			json := inspect.Container
 			if c.cfg.TraefikVersion == "1" {
 				addToMappings(mappings, c.checkContainerT1(json.ID, json.Config.Labels, logger))
 			} else {
@@ -332,11 +329,11 @@ func (c *Companion) GetInitialMappings(ctx context.Context, logger *Logger) (map
 	}
 
 	if c.cfg.DockerSwarmMode {
-		services, err := c.docker.ServiceList(ctx, swarm.ServiceListOptions{})
+		services, err := c.docker.ServiceList(ctx, client.ServiceListOptions{})
 		if err != nil {
 			return nil, err
 		}
-		for _, svc := range services {
+		for _, svc := range services.Items {
 			if c.cfg.TraefikVersion == "1" {
 				if svc.Spec.TaskTemplate.ContainerSpec != nil {
 					addToMappings(mappings, c.checkServiceT1(svc.ID, svc.Spec.TaskTemplate.ContainerSpec.Labels, logger))
@@ -375,10 +372,9 @@ func (c *Companion) RunDockerEventWatch(ctx context.Context, logger *Logger) {
 		if ctx.Err() != nil {
 			return
 		}
-		filterArgs := filters.NewArgs()
-		filterArgs.Add("type", "container")
-		filterArgs.Add("type", "service")
-		eventCh, errCh := c.docker.Events(ctx, events.ListOptions{Since: since, Filters: filterArgs})
+		filterArgs := make(client.Filters).Add("type", "container", "service")
+		stream := c.docker.Events(ctx, client.EventsListOptions{Since: since, Filters: filterArgs})
+		eventCh, errCh := stream.Messages, stream.Err
 		for {
 			select {
 			case <-ctx.Done():
@@ -415,8 +411,9 @@ func (c *Companion) processDockerEvent(ctx context.Context, event events.Message
 			logger.Debugf("Skip container event without id")
 			return newMappings
 		}
-		json, err := c.docker.ContainerInspect(ctx, contID)
+		inspect, err := c.docker.ContainerInspect(ctx, contID, client.ContainerInspectOptions{})
 		if err == nil {
+			json := inspect.Container
 			if c.cfg.TraefikVersion == "1" {
 				addToMappings(newMappings, c.checkContainerT1(json.ID, json.Config.Labels, logger))
 			} else {
@@ -431,8 +428,9 @@ func (c *Companion) processDockerEvent(ctx context.Context, event events.Message
 			logger.Debugf("Skip service update event without Actor.ID")
 			return newMappings
 		}
-		svc, _, err := c.docker.ServiceInspectWithRaw(ctx, nodeID, swarm.ServiceInspectOptions{})
+		inspect, err := c.docker.ServiceInspect(ctx, nodeID, client.ServiceInspectOptions{})
 		if err == nil {
+			svc := inspect.Service
 			if c.cfg.TraefikVersion == "1" {
 				if svc.Spec.TaskTemplate.ContainerSpec != nil {
 					addToMappings(newMappings, c.checkServiceT1(nodeID, svc.Spec.TaskTemplate.ContainerSpec.Labels, logger))

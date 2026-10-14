@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -79,7 +80,7 @@ jobs:
           path: dist/${{ matrix.artifact }}
 
   publish-main-image:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs:
       - checks
       - build-binaries
